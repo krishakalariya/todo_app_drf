@@ -1,0 +1,15 @@
+asgiref==3.7.2
+backports.zoneinfo==0.2.1
+Django==4.2.3
+django-filter==23.2
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.2.2
+importlib-metadata==6.8.0
+Markdown==3.4.3
+psycopg2-binary==2.9.6
+PyJWT==2.7.0
+python-dotenv==1.0.0
+pytz==2023.3
+sqlparse==0.4.4
+typing_extensions==4.7.1
+zipp==3.16.2
