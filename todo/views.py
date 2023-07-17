@@ -1,137 +1,162 @@
-from rest_framework.views import APIView
+import copy
+
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
 from users.models import User
-from .models import TodoItem, TodoItemAccess, AccessLog
-from .serializers import TodoItemSerializer, AccessLogSerializer
+from .models import TodoItem, TodoShareWithAccess, AccessLog, Category, TodoChangesApproval
+from .serializers import TodoItemSerializer, AccessLogSerializer, CategorySerializer, TodoShareWithSerializer
+from rest_framework import generics
+from django.core.serializers import serialize
 
 
-class TodoItemListView(APIView):
-    def get(self, request):
-        todo_items = TodoItem.objects.filter(shared_with=request.user) | TodoItem.objects.filter(owner=request.user)
-        serializer = TodoItemSerializer(todo_items, many=True)
-        return Response(serializer.data)
+class CategoryListCreateDeleteView(generics.ListCreateAPIView, generics.DestroyAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    lookup_field = 'id'
+
+
+class TodoItemListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TodoItemSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['status']
+
+    def get_queryset(self):
+        if self.request.method == "GET":
+            if due_date := self.request.GET.get('due_date'):
+                return TodoItem.objects.filter(todos_viewers__user=self.request.user,
+                                               due_date__gte=due_date) | TodoItem.objects.filter(
+                    owner=self.request.user, due_date__gte=due_date)
+            else:
+                return TodoItem.objects.filter(todos_viewers__user=self.request.user) | TodoItem.objects.filter(
+                    owner=self.request.user)
+        return TodoItem.objects.all()
 
     def post(self, request):
         serializer = TodoItemSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(owner=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        todo_instance = serializer.save(owner=request.user)
+        AccessLog.objects.create(todo_item=todo_instance, user=request.user, status='Created', changes={
+            'old_data': {},
+            'new_data': serializer.data
+        })
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-class TodoItemDetailView(APIView):
-    def get_object(self, pk):
-        try:
-            return TodoItem.objects.get(pk=pk)
-        except TodoItem.DoesNotExist:
-            raise status.HTTP_404_NOT_FOUND
+class TodoRetrieveDeleteUpdateView(generics.RetrieveUpdateDestroyAPIView):
+    lookup_field = 'id'
+    serializer_class = TodoItemSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get(self, request, pk):
-        todo_item = self.get_object(pk)
-        serializer = TodoItemSerializer(todo_item)
-        return Response(serializer.data)
+    def get_queryset(self):
+        if self.request.method == 'GET':
+            return TodoItem.objects.filter(todos_viewers__user=self.request.user,
+                                           todos_viewers__access_status='ReadOnly') | TodoItem.objects.filter(
+                owner=self.request.user)
+        elif self.request.method == 'PUT':
+            return TodoItem.objects.filter(todos_viewers__user=self.request.user,
+                                           todos_viewers__access_status='ReadWriteOnly') | TodoItem.objects.filter(
+                owner=self.request.user)
+        else:
+            return TodoItem.objects.filter(owner=self.request.user)
 
-    def put(self, request, pk):
-        todo_item = self.get_object(pk)
-
-        if not TodoItemAccess.objects.filter(todo_item=todo_item, user=request.user).exists():
-            return Response({'error': 'You do not have access to modify this TODO item'},
-                            status=status.HTTP_403_FORBIDDEN)
-
-        serializer = TodoItemSerializer(todo_item, data=request.data)
-        if serializer.is_valid():
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.owner == request.user:
+            serializer = self.serializer_class(instance=instance, data=request.data)
+            serializer.is_valid(raise_exception=True)
+            old_data = copy.copy(serialize('json', [instance]))
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            AccessLog.objects.create(todo_item=instance, user=request.user, changes={
+                'old_data': old_data,
+                'new_data': serializer.data
+            })
+            return Response('Todo has been updated sucessfully !', status=status.HTTP_200_OK)
+        else:
+            updated_fileds = ['title', 'description', 'status', 'category', 'due_date']
+            updated_data = {}
+            for field, value in request.data.items():
+                if field in updated_fileds:
+                    updated_data[field] = value
 
-    def delete(self, request, pk):
-        todo_item = self.get_object(pk)
+            TodoChangesApproval.objects.create(todo_item=instance, user=request.user, changes=updated_data)
+            return Response('Request for update todo has been submitted ! Please wait for owner approval.',
+                            status=status.HTTP_200_OK)
 
-        if not TodoItemAccess.objects.filter(todo_item=todo_item, user=request.user).exists():
-            return Response({'error': 'You do not have access to delete this TODO item'},
-                            status=status.HTTP_403_FORBIDDEN)
-
-        todo_item.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class TodoItemShareView(APIView):
-    def post(self, request, pk):
-        todo_item = TodoItem.objects.get(pk=pk)
-        user_ids = request.data.get('user_ids', [])
-        access_level = request.data.get('access_level', 'RO')
-
-        if not user_ids:
-            return Response({'error': 'Please provide at least one user ID'}, status=status.HTTP_400_BAD_REQUEST)
-
-        for user_id in user_ids:
-            user = User.objects.get(pk=user_id)
-            can_edit = access_level == 'RW'
-            needs_approval = access_level == 'AP'
-
-            TodoItemAccess.objects.get_or_create(todo_item=todo_item, user=user,
-                                                 defaults={'can_edit': can_edit, 'needs_approval': needs_approval})
-
-        serializer = TodoItemSerializer(todo_item)
-        return Response(serializer.data)
-
-
-class TodoItemApproveView(APIView):
-    def post(self, request, pk):
-        todo_item = TodoItem.objects.get(pk=pk)
-
-        if not TodoItemAccess.objects.filter(todo_item=todo_item, user=request.user, can_edit=True).exists():
-            return Response({'error': 'You do not have permission to approve or reject changes'},
-                            status=status.HTTP_403_FORBIDDEN)
-
-        approval_status = request.data.get('approval_status')
-
-        if approval_status not in ['A', 'R']:
-            return Response({'error': 'Invalid approval status'}, status=status.HTTP_400_BAD_REQUEST)
-
-        todo_item.approval_status = approval_status
-        todo_item.save()
-
-        serializer = TodoItemSerializer(todo_item)
-        return Response(serializer.data)
+    def delete(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.is_active:
+            AccessLog.objects.create(todo_item=instance, user=request.user, changes={
+                'old_data': {'is_active': True},
+                'new_data': {'is_active': False}
+            })
+            instance.is_active = False
+            instance.save()
+            return Response('Todo has been In-activated !',
+                            status=status.HTTP_200_OK)
+        else:
+            AccessLog.objects.create(todo_item=instance, user=request.user, changes={
+                'old_data': {'is_active': False},
+                'new_data': {'is_active': True}
+            })
+            instance.is_active = True
+            return Response('Todo has been activated !',
+                            status=status.HTTP_200_OK)
 
 
-class AccessLogView(APIView):
-    def get(self, request):
-        access_logs = AccessLog.objects.filter(user=request.user)
-        serializer = AccessLogSerializer(access_logs, many=True)
-        return Response(serializer.data)
+class TodoChangesApprovalView(generics.UpdateAPIView):
+    serializer_class = TodoItemSerializer
+    lookup_field = 'id'
 
-    def log_activity(self, user, todo_item, activity):
-        AccessLog.objects.create(user=user, todo_item=todo_item, activity=activity)
+    def get_queryset(self):
+        return TodoChangesApproval.objects.filter(todo_item__owner=self.request.user)
 
-    def put(self, request, pk):
-        todo_item = self.get_object(pk)
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status == "Pending":
+            if request.data.get('status', None) == 'Approved':
+                serializer = self.serializer_class(instance=instance.todo_item, data=instance.changes)
+                serializer.is_valid(raise_exception=True)
+                old_data = copy.copy(serialize('json', [instance]))
+                serializer.save()
+                AccessLog.objects.create(todo_item=instance.todo_item, user=request.user, changes={
+                    'old_data': old_data,
+                    'new_data': serializer.data
+                })
+                instance.status = 'Approved'
+                instance.save()
+                return Response('Changes has been approved and reflected in Todo.', status=status.HTTP_200_OK)
+            elif request.data.get('status', None) == 'Rejected':
+                instance.status = 'Rejected'
+                instance.save()
+                return Response('Changes has been rejected.', status=status.HTTP_200_OK)
+            else:
+                raise ValidationError('Please pass valid status !')
+        else:
+            raise ValidationError('Changes are not in pending state !')
 
-        if not TodoItemAccess.objects.filter(todo_item=todo_item, user=request.user).exists():
-            return Response({'error': 'You do not have access to modify this TODO item'}, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = TodoItemSerializer(todo_item, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
+class TodoShareWithUserView(generics.UpdateAPIView):
+    serializer_class = TodoShareWithSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = TodoShareWithAccess.objects.all()
 
-            # Log the activity
-            self.log_activity(request.user, todo_item, 'TODO item updated')
-
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request, pk):
-        todo_item = self.get_object(pk)
-
-        if not TodoItemAccess.objects.filter(todo_item=todo_item, user=request.user).exists():
-            return Response({'error': 'You do not have access to delete this TODO item'}, status=status.HTTP_403_FORBIDDEN)
-
-        todo_item.delete()
-
-        # Log the activity
-        self.log_activity(request.user, todo_item, 'TODO item deleted')
-
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    def update(self, request, *args, **kwargs):
+        if TodoShareWithAccess.objects.filter(todo_item__owner=self.request.user).exists():
+            if instance := TodoShareWithAccess.objects.filter(todo_item=request.data.get('todo_item'),
+                                                              user_id=request.data.get('user')):
+                serializer = self.serializer_class(instance=instance.first(), data=request.data)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                return Response('Update successfully !', status=status.HTTP_200_OK)
+            else:
+                serializer = self.serializer_class(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                return Response('Created successfully !', status=status.HTTP_201_CREATED)
+        else:
+            raise PermissionDenied

@@ -1,12 +1,14 @@
 # urls.py
 
 from django.urls import path
-from .views import TodoItemListView, TodoItemDetailView, TodoItemShareView, TodoItemApproveView, AccessLogView
+from .views import TodoItemListCreateView, CategoryListCreateDeleteView, TodoRetrieveDeleteUpdateView, \
+    TodoChangesApprovalView, TodoShareWithUserView
 
 urlpatterns = [
-    path('api/todo/', TodoItemListView.as_view(), name='todo-list'),
-    path('api/todo/<int:pk>/', TodoItemDetailView.as_view(), name='todo-detail'),
-    path('api/todo/<int:pk>/share/', TodoItemShareView.as_view(), name='todo-share'),
-    path('api/todo/<int:pk>/approve/', TodoItemApproveView.as_view(), name='todo-approve'),
-    path('api/access-log/', AccessLogView.as_view(), name='access-log'),
+    path('api/category/', CategoryListCreateDeleteView.as_view(), name='category-list-create'),
+    path('api/category/<int:id>/', CategoryListCreateDeleteView.as_view(), name='category-delete'),
+    path('api/todo/', TodoItemListCreateView.as_view(), name='todo-list-create'),
+    path('api/todo/<int:id>/', TodoRetrieveDeleteUpdateView.as_view(), name='todo-retrieve-update-delete'),
+    path('api/todo_changes/<int:id>/', TodoChangesApprovalView.as_view(), name='todo-changes-approval'),
+    path('api/todo_share/', TodoShareWithUserView.as_view(), name='todo-share'),
 ]

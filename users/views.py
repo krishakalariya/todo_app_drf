@@ -1,12 +1,8 @@
-from datetime import datetime
-
-from django.contrib.auth import authenticate
 from django.db.models import Q
-from django.shortcuts import render
 from rest_framework import generics, status
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenBlacklistView
 
@@ -15,7 +11,6 @@ from .models import User
 from rest_framework.exceptions import ValidationError
 from django.contrib.auth.hashers import check_password
 from .utils import get_tokens_for_user
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 
 
 class RegisterAPI(generics.GenericAPIView):
@@ -56,4 +51,5 @@ class LogoutView(TokenBlacklistView):
     """
     View for logout user
     """
+    permission_classes = [IsAuthenticatedOrReadOnly]
     serializer_class = LogoutSerializer
