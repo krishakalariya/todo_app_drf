@@ -4,14 +4,7 @@
 3) Create .env file in todo_app_drf directory and set value of , DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 4) Perform migrations : python3 manage.py migrate
 5) Command for start server : python3 manage.py runserver
-6) Describe Url:
-   1) In Postman Collection there are register url
-   2) Then hit login url 
-   3) Then hit Create/Delete category url for create and delete category.
-   4) Create, Update, Retrieve, List, Delete ToDO Url.
-   5) Share todo with other user url.
-   6) Todo Change approval for owner can approve or reject change for todo
-7) Steps to execute the urls ::
+6) Steps to execute the urls ::
    1) Register (minimum 2 users)
    2) Login
    3) Create categories
@@ -21,4 +14,4 @@
    7) Now, Owner can approve/reject the change requests. If owner will approve the changes then changes will reflect in ToDo.
    8) Throughout the process all the changes related to ToDO will be saved as Logs.
    9) You can List all the changes for any ToDo.
-8) Please refer postman collection added in project directory > .postman folder
+7) Please refer postman collection added in project directory > .postman folder
