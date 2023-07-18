@@ -43,3 +43,9 @@ class TodoShareWithSerializer(serializers.ModelSerializer):
     class Meta:
         model = TodoShareWithAccess
         fields = ['id', 'todo_item', 'user', 'access_status']
+
+
+class TodoLogsSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = AccessLog
+        fields = '__all__'

@@ -8,7 +8,8 @@ from rest_framework import status
 
 from users.models import User
 from .models import TodoItem, TodoShareWithAccess, AccessLog, Category, TodoChangesApproval
-from .serializers import TodoItemSerializer, AccessLogSerializer, CategorySerializer, TodoShareWithSerializer
+from .serializers import TodoItemSerializer, AccessLogSerializer, CategorySerializer, TodoShareWithSerializer, \
+    TodoLogsSerializers
 from rest_framework import generics
 from django.core.serializers import serialize
 
@@ -110,6 +111,7 @@ class TodoRetrieveDeleteUpdateView(generics.RetrieveUpdateDestroyAPIView):
 
 class TodoChangesApprovalView(generics.UpdateAPIView):
     serializer_class = TodoItemSerializer
+    permission_classes = [IsAuthenticated]
     lookup_field = 'id'
 
     def get_queryset(self):
@@ -146,7 +148,7 @@ class TodoShareWithUserView(generics.UpdateAPIView):
     queryset = TodoShareWithAccess.objects.all()
 
     def update(self, request, *args, **kwargs):
-        if TodoShareWithAccess.objects.filter(todo_item__owner=self.request.user).exists():
+        if TodoItem.objects.filter(id=request.data.get('todo_item'), owner=self.request.user).exists():
             if instance := TodoShareWithAccess.objects.filter(todo_item=request.data.get('todo_item'),
                                                               user_id=request.data.get('user')):
                 serializer = self.serializer_class(instance=instance.first(), data=request.data)
@@ -160,3 +162,11 @@ class TodoShareWithUserView(generics.UpdateAPIView):
                 return Response('Created successfully !', status=status.HTTP_201_CREATED)
         else:
             raise PermissionDenied
+
+
+class TodoLogsView(generics.ListAPIView):
+    serializer_class = TodoLogsSerializers
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return AccessLog.objects.filter(todo_item=self.kwargs.get('todo_item'), todo_item__owner=self.request.user)

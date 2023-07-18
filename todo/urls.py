@@ -2,7 +2,7 @@
 
 from django.urls import path
 from .views import TodoItemListCreateView, CategoryListCreateDeleteView, TodoRetrieveDeleteUpdateView, \
-    TodoChangesApprovalView, TodoShareWithUserView
+    TodoChangesApprovalView, TodoShareWithUserView, TodoLogsView
 
 urlpatterns = [
     path('api/category/', CategoryListCreateDeleteView.as_view(), name='category-list-create'),
@@ -11,4 +11,5 @@ urlpatterns = [
     path('api/todo/<int:id>/', TodoRetrieveDeleteUpdateView.as_view(), name='todo-retrieve-update-delete'),
     path('api/todo_changes/<int:id>/', TodoChangesApprovalView.as_view(), name='todo-changes-approval'),
     path('api/todo_share/', TodoShareWithUserView.as_view(), name='todo-share'),
+    path('api/todo_logs/<int:todo_item>/', TodoLogsView.as_view(), name='todo-logs')
 ]

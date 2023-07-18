@@ -271,42 +271,6 @@
 			"response": []
 		},
 		{
-			"name": "share_todo_with _other_user",
-			"request": {
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"shared_user_ids\": [1,2]\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://127.0.0.1:8000/todo/api/todo/1/share/",
-					"protocol": "http",
-					"host": [
-						"127",
-						"0",
-						"0",
-						"1"
-					],
-					"port": "8000",
-					"path": [
-						"todo",
-						"api",
-						"todo",
-						"1",
-						"share",
-						""
-					]
-				}
-			},
-			"response": []
-		},
-		{
 			"name": "Create category",
 			"request": {
 				"method": "POST",
@@ -429,6 +393,14 @@
 		},
 		{
 			"name": "Todo Share",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "Todo Log List",
 			"request": {
 				"method": "GET",
 				"header": []

@@ -1,6 +1,6 @@
 from django.db.models import Q
 from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -51,5 +51,5 @@ class LogoutView(TokenBlacklistView):
     """
     View for logout user
     """
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     serializer_class = LogoutSerializer
